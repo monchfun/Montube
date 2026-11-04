@@ -23,7 +23,7 @@ DB_PATH = Path(os.getenv("MONTUBE_DB_PATH", DEFAULT_ROOT / "montube.db"))
 
 SOCKET_PREFIX = "/app/montube"
 STATIC_DIR = APP_ROOT / "static"
-BUILD_ID = "montube-20261104133723"  # replaced by build-fpk.sh so every package build is distinguishable
+BUILD_ID = "montube-20261104142741"  # replaced by build-fpk.sh so every package build is distinguishable
 
 
 def log_config():
@@ -36,7 +36,7 @@ def log_config():
     print(f"[montube] static files={found}", flush=True)
 
 
-app = FastAPI(title="Montube", version="0.2.6")
+app = FastAPI(title="Montube", version="0.2.7")
 
 
 async def serve_app(scope, receive, send):
@@ -48,11 +48,9 @@ class GatewayPrefixMiddleware:
     """Serve the app under fnOS gateway paths such as /app/montube/api/health.
 
     The gateway forwards the prefix as part of the path, while every route and
-    static mount is registered at the root. Each such request is therefore
-    replayed once with the prefix stripped. The replay keeps the same dict for
-    middleware context and returns immediately, so it never re-enters the regex
-    router; while it runs the original scope shows root_path=/app/montube so
-    generated HTML and health output keep the URLs the browser needs.
+    static mount is registered at the root. Keep the complete path and set the
+    ASGI root_path so Starlette's router and StaticFiles can strip each mount
+    prefix exactly once.
     """
 
     async def __call__(self, scope, receive, send):
@@ -73,10 +71,7 @@ class GatewayPrefixMiddleware:
             })
             await send({"type": "http.response.body", "body": b""})
             return
-        inner_path = path[len(SOCKET_PREFIX):] or "/"
         replay = dict(scope)
-        replay["path"] = inner_path
-        replay["raw_path"] = inner_path.encode("utf-8", "replace")
         replay["root_path"] = SOCKET_PREFIX
         await serve_app(replay, receive, send)
 

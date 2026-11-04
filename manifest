@@ -1,5 +1,5 @@
 appname=montube
-version=0.2.6
+version=0.2.7
 display_name=Montube
 desc=在飞牛 fnOS 上管理 yt-dlp 视频与音频下载。
 source=thirdparty
@@ -11,4 +11,4 @@ desktop_uidir=ui
 desktop_applaunchname=montube.main
 ctl_stop=true
 install_dep_apps=python312
-changelog=0.2.6：修复 fnOS 中界面空白与 /assets 404（网关前缀路由、StaticFiles 挂载顺序、ui/map 打包、构建号与启动自检日志）
+changelog=0.2.7：修复网关前缀下 StaticFiles 路径二次拼接导致的前端资源 404
