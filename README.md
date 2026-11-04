@@ -29,6 +29,8 @@ The app declares the fnOS `python312` dependency, creates an isolated virtual en
 
 The download directory is configurable from the web interface and is persisted in the app database. Choose a directory that fnOS has authorized for the app; the default comes from the app's shared directory environment. Task data and logs are stored in the app's persistent variable directory. The desktop entry uses the fnOS Unix Socket gateway at `/app/montube`. The gateway forwards that prefix as part of the path, so `GatewayPrefixMiddleware` in `app/main.py` strips it before routing while keeping `root_path=/app/montube` visible to endpoints; static mounts and API routes stay registered at the root.
 
+YouTube downloads can use an exported browser `cookies.txt` file. Open **设置**, enter its NAS path in **YouTube cookies 路径**, and save it. The file is only passed to yt-dlp with `--cookies`; Montube does not read or display its contents. The optional **Deno 路径** field enables yt-dlp's YouTube JavaScript runtime support, for example `/usr/local/bin/deno`. The same values can be supplied before startup with `MONTUBE_COOKIES` and `MONTUBE_JS_RUNTIME`.
+
 ### 排查空白页
 
 1. 启动日志（`$TRIM_PKGVAR/montube.log`）里 `[montube]` 开头的行会写明版本、构建号和 `static/`、`ui/`、`wheels/` 是否存在，`build=` 为 `montube-YYYYMMDDhhmmss` 才能确认跑的是新包。

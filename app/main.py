@@ -19,11 +19,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 APP_ROOT = Path(__file__).resolve().parent
 DEFAULT_ROOT = APP_ROOT.parent
 DEFAULT_DOWNLOAD_DIR = os.getenv("MONTUBE_DOWNLOAD_DIR", str(DEFAULT_ROOT / "downloads"))
+DEFAULT_COOKIES_FILE = os.getenv("MONTUBE_COOKIES", "")
+DEFAULT_JS_RUNTIME = os.getenv("MONTUBE_JS_RUNTIME", "")
 DB_PATH = Path(os.getenv("MONTUBE_DB_PATH", DEFAULT_ROOT / "montube.db"))
 
 SOCKET_PREFIX = "/app/montube"
 STATIC_DIR = APP_ROOT / "static"
-BUILD_ID = "montube-20261104142741"  # replaced by build-fpk.sh so every package build is distinguishable
+BUILD_ID = "montube-20261104154444"  # replaced by build-fpk.sh so every package build is distinguishable
 
 
 def log_config():
@@ -36,7 +38,7 @@ def log_config():
     print(f"[montube] static files={found}", flush=True)
 
 
-app = FastAPI(title="Montube", version="0.2.7")
+app = FastAPI(title="Montube", version="0.2.8")
 
 
 async def serve_app(scope, receive, send):
@@ -108,6 +110,8 @@ def init_db():
             key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL
         )""")
         conn.execute("INSERT OR IGNORE INTO settings(key,value,updated_at) VALUES('download_dir',?,?)", (DEFAULT_DOWNLOAD_DIR, now()))
+        conn.execute("INSERT OR IGNORE INTO settings(key,value,updated_at) VALUES('cookies_file',?,?)", (DEFAULT_COOKIES_FILE, now()))
+        conn.execute("INSERT OR IGNORE INTO settings(key,value,updated_at) VALUES('js_runtime',?,?)", (DEFAULT_JS_RUNTIME, now()))
 
 class CreateJob(BaseModel):
     url: str = Field(min_length=4)
@@ -116,16 +120,21 @@ class CreateJob(BaseModel):
 
 class SettingsUpdate(BaseModel):
     download_dir: str = Field(min_length=1, max_length=1024)
+    cookies_file: str = Field(default="", max_length=1024)
+    js_runtime: str = Field(default="", max_length=1024)
 
 def now():
     return datetime.now(timezone.utc).isoformat()
 
 def get_download_dir() -> Path:
+    return Path(get_setting("download_dir", DEFAULT_DOWNLOAD_DIR)).expanduser()
+
+
+def get_setting(key: str, default: str = "") -> str:
     init_db()
     with db() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key='download_dir'").fetchone()
-    configured = row["value"] if row else DEFAULT_DOWNLOAD_DIR
-    return Path(configured).expanduser()
+        row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return str(row["value"]) if row else default
 
 def update_job(job_id: str, **fields):
     fields["updated_at"] = now()
@@ -154,11 +163,20 @@ def run_download(job_id: str, payload: CreateJob):
         update_job(job_id, status="failed", error=f"下载目录不可用: {exc}")
         return
     output = download_dir / "%(title)s.%(ext)s"
+    cookies_file = get_setting("cookies_file", DEFAULT_COOKIES_FILE).strip()
+    js_runtime = get_setting("js_runtime", DEFAULT_JS_RUNTIME).strip()
+    if cookies_file and not Path(cookies_file).expanduser().is_file():
+        update_job(job_id, status="failed", error=f"cookies 文件不存在: {cookies_file}")
+        return
     if payload.kind == "audio":
         args = [sys.executable, "-m", "yt_dlp", "--newline", "--no-playlist", "-x", "--audio-format", "mp3", "-o", str(output), payload.url]
     else:
         fmt = "bestvideo+bestaudio/best" if payload.quality == "best" else f"bestvideo[height<={payload.quality}]+bestaudio/best[height<={payload.quality}]"
         args = [sys.executable, "-m", "yt_dlp", "--newline", "--no-playlist", "-f", fmt, "--merge-output-format", "mp4", "-o", str(output), payload.url]
+    if cookies_file:
+        args[3:3] = ["--cookies", str(Path(cookies_file).expanduser())]
+    if js_runtime:
+        args[3:3] = ["--js-runtimes", f"deno:{js_runtime}"]
     update_job(job_id, status="running", progress=0)
     try:
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -184,7 +202,11 @@ def list_jobs():
 
 @app.get("/api/settings")
 def get_settings():
-    return {"download_dir": str(get_download_dir())}
+    return {
+        "download_dir": str(get_download_dir()),
+        "cookies_file": get_setting("cookies_file", DEFAULT_COOKIES_FILE),
+        "js_runtime": get_setting("js_runtime", DEFAULT_JS_RUNTIME),
+    }
 
 
 @app.put("/api/settings")
@@ -196,9 +218,23 @@ def update_settings(payload: SettingsUpdate):
             raise OSError("路径不是目录")
     except OSError as exc:
         raise HTTPException(400, f"下载目录不可用: {exc}") from exc
+    cookies_file = payload.cookies_file.strip()
+    if cookies_file:
+        cookie_path = Path(cookies_file).expanduser()
+        if not cookie_path.is_file():
+            raise HTTPException(400, f"cookies 文件不存在: {cookie_path}")
+        cookies_file = str(cookie_path)
+    js_runtime = payload.js_runtime.strip()
+    if js_runtime and "/" in js_runtime:
+        runtime_path = Path(js_runtime).expanduser()
+        if not runtime_path.is_file() or not os.access(runtime_path, os.X_OK):
+            raise HTTPException(400, f"JS runtime 不可执行: {runtime_path}")
+        js_runtime = str(runtime_path)
     with db() as conn:
         conn.execute("INSERT INTO settings(key,value,updated_at) VALUES('download_dir',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (str(path), now()))
-    return {"download_dir": str(path)}
+        for key, value in (("cookies_file", cookies_file), ("js_runtime", js_runtime)):
+            conn.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (key, value, now()))
+    return {"download_dir": str(path), "cookies_file": cookies_file, "js_runtime": js_runtime}
 
 
 @app.post("/api/jobs", status_code=202)
