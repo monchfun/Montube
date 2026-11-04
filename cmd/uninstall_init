@@ -1,0 +1,3 @@
+#!/bin/bash
+"$(dirname "$0")/main" stop || true
+rm -f "${TRIM_APPDEST:-}/app.sock" 2>/dev/null || true

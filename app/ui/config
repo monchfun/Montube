@@ -1,0 +1,14 @@
+{
+  ".url": {
+    "montube.main": {
+      "title": "Montube",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/montube",
+      "gatewaySocket": "app.sock",
+      "url": "/app/montube/",
+      "allUsers": false
+    }
+  }
+}

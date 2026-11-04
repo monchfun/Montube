@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+frontend/node_modules/
+.devdata/
+.vite-cache/
+.DS_Store
+__pycache__/
+montube.db
+data/
+downloads/*
+!downloads/.gitkeep

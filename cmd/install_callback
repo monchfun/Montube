@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+APP_DIR="${TRIM_APPDEST:-$PROJECT_DIR/app}"
+APP_HOME="${TRIM_PKGHOME:-$APP_DIR/home}"
+APP_VAR="${TRIM_PKGVAR:-$APP_DIR/var}"
+PYTHON_ROOT="/var/apps/python312/target/bin"
+export PATH="$PYTHON_ROOT:$PATH"
+mkdir -p "$APP_HOME" "$APP_VAR"
+case "$(uname -m)" in
+  x86_64|amd64|x86|x64) ;;
+  *) echo "Montube FPK supports x86_64 only; detected $(uname -m)." >&2; exit 1 ;;
+esac
+WHEEL_DIR="$APP_DIR/wheels/x86_64"
+if [ ! -d "$WHEEL_DIR" ]; then
+  echo "Bundled Python wheels are missing for x86_64." >&2
+  exit 1
+fi
+rm -rf "$APP_HOME/venv"
+"$PYTHON_ROOT/python3" -m venv "$APP_HOME/venv" || "$PYTHON_ROOT/python3.12" -m venv "$APP_HOME/venv" || python3 -m venv "$APP_HOME/venv"
+"$APP_HOME/venv/bin/pip" install --disable-pip-version-check --no-index --find-links "$WHEEL_DIR" --only-binary=:all: -r "$APP_DIR/requirements.txt"
+chmod 700 "$APP_HOME/venv"
