@@ -25,7 +25,7 @@ DB_PATH = Path(os.getenv("MONTUBE_DB_PATH", DEFAULT_ROOT / "montube.db"))
 
 SOCKET_PREFIX = "/app/montube"
 STATIC_DIR = APP_ROOT / "static"
-BUILD_ID = "montube-20261104154444"  # replaced by build-fpk.sh so every package build is distinguishable
+BUILD_ID = "montube-20261105113620"  # replaced by build-fpk.sh so every package build is distinguishable
 
 
 def log_config():
@@ -38,7 +38,7 @@ def log_config():
     print(f"[montube] static files={found}", flush=True)
 
 
-app = FastAPI(title="Montube", version="0.2.8")
+app = FastAPI(title="Montube", version="0.2.9")
 
 
 async def serve_app(scope, receive, send):
@@ -176,7 +176,7 @@ def run_download(job_id: str, payload: CreateJob):
     if cookies_file:
         args[3:3] = ["--cookies", str(Path(cookies_file).expanduser())]
     if js_runtime:
-        args[3:3] = ["--js-runtimes", f"deno:{js_runtime}"]
+        args[3:3] = ["--js-runtimes", js_runtime, "--remote-components", "ejs:github"]
     update_job(job_id, status="running", progress=0)
     try:
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
